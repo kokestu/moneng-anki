@@ -21,9 +21,10 @@ def download_image(filename: str, uri: str) -> str:
         'moneng-anki/0.0.0 (https://github.com/kokestu/moneng-anki)'}
     img_data = requests.get(uri, headers=headers).content
     ext = uri.split('.')[-1]
-    with open('../img/' + filename + ext, 'wb') as file:
+    filename_with_ext = f'{filename}.{ext}'
+    with open('../img/' + filename_with_ext, 'wb') as file:
         file.write(img_data)
-    return filename
+    return filename_with_ext
 
 
 def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
