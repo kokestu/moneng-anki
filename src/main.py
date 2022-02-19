@@ -28,25 +28,24 @@ def scrape_wikidata() -> (List[Dict[str, str]], List[str]):
     url = 'https://query.wikidata.org/sparql'
     query = '''
     SELECT (?itemLabel as ?name)
-    (SAMPLE(?start) as ?start)
-    (SAMPLE(?end) as ?end)
+    (min(?start) as ?start_date) # first start date
+    (max(?end) as ?end_date) # last end date
     (GROUP_CONCAT(DISTINCT ?replacesLabel; SEPARATOR=", ") AS ?predecessors)
     (GROUP_CONCAT(DISTINCT ?replaced_byLabel; SEPARATOR=", ") AS ?followers)
     (SAMPLE(?pic) AS ?pics)
     WHERE {
-    VALUES ?positions {wd:Q18810062 wd:Q9134365}
-    ?item p:P39 ?statement.
-    ?statement ps:P39 ?positions.
-    OPTIONAL { ?statement pq:P580 ?start. }
-    OPTIONAL { ?statement pq:P582 ?end. }
-    OPTIONAL { ?statement pq:P1365 ?replaces. }
-    OPTIONAL { ?statement pq:P1366 ?replaced_by. }
-    OPTIONAL { ?item wdt:P18 ?pic}
+    VALUES ?positions {wd:Q18810062 wd:Q9134365}  # monarch of uk or monarch on England
+    ?item p:P39 ?statement. # position held
+    ?statement ps:P39 ?positions. # position attributes to get:
+    OPTIONAL { ?statement pq:P580 ?start. } # start time
+    OPTIONAL { ?statement pq:P582 ?end. } # end time
+    OPTIONAL { ?statement pq:P1365 ?replaces. } # replaces
+    OPTIONAL { ?statement pq:P1366 ?replaced_by. } # replaced by
+    OPTIONAL { ?item wdt:P18 ?pic} # monarch picture
     SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en".
                             ?item rdfs:label ?itemLabel.
                             ?replaces rdfs:label ?replacesLabel.
-                            ?replaced_by rdfs:label ?replaced_byLabel.
-                            }
+                            ?replaced_by rdfs:label ?replaced_byLabel.}
     }
     group by (?itemLabel)
     ORDER BY DESC (?start)
@@ -66,6 +65,9 @@ def scrape_wikidata() -> (List[Dict[str, str]], List[str]):
 
     images = []
     for entry in data:
+        image_uri = get_value(entry, 'pics')
+        if not image_uri:
+            raise ValueError(f'No image for {entry}')
         img_name = download_image(
             get_value(entry, 'name').replace(' ', '-'),
             get_value(entry, 'pics')
@@ -73,8 +75,8 @@ def scrape_wikidata() -> (List[Dict[str, str]], List[str]):
         images.append(img_name)
         monarch = dict(
             Monarch=get_value(entry, 'name'),
-            ReignedFrom=get_year(get_value(entry, 'start')),
-            ReignedTo=get_year(get_value(entry, 'end')),
+            ReignedFrom=get_year(get_value(entry, 'start_date')),
+            ReignedTo=get_year(get_value(entry, 'end_date')),
             Image=f'<img src="{img_name}">',
             Predecessor=get_value(entry, 'predecessors'),
             Successor=get_value(entry, 'followers'),
@@ -170,6 +172,7 @@ def write_deck(out: str, deck: Deck, images: List[str]) -> None:
     package = Package(deck)
     package.media_files = [f'../img/{img}' for img in images]
     package.write_to_file(out)
+
 
 if __name__ == "__main__":
     import sys
