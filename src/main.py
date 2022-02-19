@@ -5,24 +5,26 @@ from datetime import datetime
 
 
 def main(args: List[str]) -> int:
+    assert len(args) == 2, "Usage: main OUTPUT"
+    out = args[1]
     # Scrape the data from Wikidata
-    data = scrape_wikidata()
+    data, images = scrape_wikidata()
     # Build the deck object
     deck = build_deck(data)
     # Write the deck object to an .apkg file
-    write_deck(deck)
+    write_deck(out, deck, images)
     return 0
 
 
-def download_image(uri: str) -> str:
-    name = uri.split('/')[-1]
+def download_image(filename: str, uri: str) -> str:
     img_data = requests.get(uri).content
-    with open('../img/'+name, 'wb') as file:
+    ext = uri.split('.')[-1]
+    with open('../img/' + filename + ext, 'wb') as file:
         file.write(img_data)
-    return name
+    return filename
 
 
-def scrape_wikidata() -> List[Dict[str, str]]:
+def scrape_wikidata() -> (List[Dict[str, str]], List[str]):
     url = 'https://query.wikidata.org/sparql'
     query = '''
     SELECT (?itemLabel as ?name)
@@ -59,11 +61,16 @@ def scrape_wikidata() -> List[Dict[str, str]]:
 
     def get_year(iso_date):
         if iso_date:
-            return datetime.strptime(iso_date, '%Y-%m-%dT%H:%M:%SZ').year
+            return str(datetime.strptime(iso_date, '%Y-%m-%dT%H:%M:%SZ').year)
         return 'Present'
 
+    images = []
     for entry in data:
-        img_name = download_image(get_value(entry, 'pics'),)
+        img_name = download_image(
+            get_value(entry, 'name').replace(' ', '-'),
+            get_value(entry, 'pics')
+        )
+        images.append(img_name)
         monarch = dict(
             Monarch=get_value(entry, 'name'),
             ReignedFrom=get_year(get_value(entry, 'start')),
@@ -74,7 +81,7 @@ def scrape_wikidata() -> List[Dict[str, str]]:
         )
         monarchs.append(monarch)
 
-    return monarchs
+    return monarchs, images
 
 
 def build_deck(data: List[Dict[str, str]]) -> Deck:
@@ -159,10 +166,10 @@ def make_note(datum: Dict[str, str], model: Model) -> Note:
     return my_note
 
 
-def write_deck(deck: Deck) -> None:
+def write_deck(out: str, deck: Deck, images: List[str]) -> None:
     package = Package(deck)
-    package.media_files = ['../img/miaownarch.jpg']
-    package.write_to_file('test.apkg')
+    package.media_files = [f'../img/{img}' for img in images]
+    package.write_to_file(out)
 
 if __name__ == "__main__":
     import sys
