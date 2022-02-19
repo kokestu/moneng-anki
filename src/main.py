@@ -67,7 +67,16 @@ def build_deck(data: List[Dict[str, str]]) -> Deck:
                 'qfmt': '{{#Image}}{{Image}}{{/Image}}',
                 'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}',
             },
-        ]
+        ],
+        css="""
+        .card {
+        font-family: arial;
+        font-size: 20px;
+        text-align: center;
+        color: black;
+        background-color: white;
+        }
+        """,   # custom styling
     )
     # Create deck
     deck = Deck(
@@ -85,12 +94,12 @@ def make_note(datum: Dict[str, str], model: Model) -> Note:
     my_note = Note(
         model=model,
         fields=[
-            datum.get("Monarch") or "",
-            datum.get("ReignedFrom") or "",
-            datum.get("ReignedTo") or "",
-            datum.get("Image") or "",
-            datum.get("Predecessor") or "",
-            datum.get("Successor") or "",
+            datum.get("Monarch"),
+            datum.get("ReignedFrom"),
+            datum.get("ReignedTo"),
+            datum.get("Image"),
+            datum.get("Predecessor"),
+            datum.get("Successor"),
         ]
     )
     return my_note
