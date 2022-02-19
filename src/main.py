@@ -1,5 +1,8 @@
 from typing import List, Dict
 from genanki import Deck, Note, Model, Package
+import requests
+from datetime import datetime
+
 
 def main(args: List[str]) -> int:
     # Scrape the data from Wikidata
@@ -10,24 +13,75 @@ def main(args: List[str]) -> int:
     write_deck(deck)
     return 0
 
+
+def download_image(uri: str) -> str:
+    name = uri.split('/')[-1]
+    img_data = requests.get(uri).content
+    with open('../img/'+name, 'wb') as file:
+        file.write(img_data)
+    return name
+
+
 def scrape_wikidata() -> List[Dict[str, str]]:
-    return [
-        {
-            "Monarch": "Purrincess Felicity II",
-            "ReignedFrom": "1986",
-            "ReignedTo": "present",
-            "Image": '<img src="miaownarch.jpg">',
-            "Predecessor": "King Joseph I",
-            "Successor": "",
-        }
-    ]
+    url = 'https://query.wikidata.org/sparql'
+    query = '''
+    SELECT (?itemLabel as ?name)
+    (SAMPLE(?start) as ?start)
+    (SAMPLE(?end) as ?end)
+    (GROUP_CONCAT(DISTINCT ?replacesLabel; SEPARATOR=", ") AS ?predecessors)
+    (GROUP_CONCAT(DISTINCT ?replaced_byLabel; SEPARATOR=", ") AS ?followers)
+    (SAMPLE(?pic) AS ?pics)
+    WHERE {
+    VALUES ?positions {wd:Q18810062 wd:Q9134365}
+    ?item p:P39 ?statement.
+    ?statement ps:P39 ?positions.
+    OPTIONAL { ?statement pq:P580 ?start. }
+    OPTIONAL { ?statement pq:P582 ?end. }
+    OPTIONAL { ?statement pq:P1365 ?replaces. }
+    OPTIONAL { ?statement pq:P1366 ?replaced_by. }
+    OPTIONAL { ?item wdt:P18 ?pic}
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en".
+                            ?item rdfs:label ?itemLabel.
+                            ?replaces rdfs:label ?replacesLabel.
+                            ?replaced_by rdfs:label ?replaced_byLabel.
+                            }
+    }
+    group by (?itemLabel)
+    ORDER BY DESC (?start)
+    '''
+    r = requests.get(url, params={'format': 'json', 'query': query})
+    data = r.json()['results']['bindings']
+
+    monarchs = []
+
+    def get_value(monarch, name):
+        return monarch.get(name, {}).get('value', '')
+
+    def get_year(iso_date):
+        if iso_date:
+            return datetime.strptime(iso_date, '%Y-%m-%dT%H:%M:%SZ').year
+        return 'Present'
+
+    for entry in data:
+        img_name = download_image(get_value(entry, 'pics'),)
+        monarch = dict(
+            Monarch=get_value(entry, 'name'),
+            ReignedFrom=get_year(get_value(entry, 'start')),
+            ReignedTo=get_year(get_value(entry, 'end')),
+            Image=f'<img src="{img_name}">',
+            Predecessor=get_value(entry, 'predecessors'),
+            Successor=get_value(entry, 'followers'),
+        )
+        monarchs.append(monarch)
+
+    return monarchs
 
 
 def build_deck(data: List[Dict[str, str]]) -> Deck:
     # Define model
     model = Model(
         7499558394,  # Unique model ID randomly generated
-        'Monarch Model',
+        'Monarch',
         fields=[
             {"name": "Monarch"},
             {"name": "ReignedFrom"},
@@ -88,7 +142,7 @@ def build_deck(data: List[Dict[str, str]]) -> Deck:
         deck.add_note(make_note(d, model))
     # Return
     return deck
-    
+
 
 def make_note(datum: Dict[str, str], model: Model) -> Note:
     my_note = Note(
