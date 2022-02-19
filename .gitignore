@@ -1,4 +1,5 @@
 # Ignore outputs
 *.jpg
+*.JPG
 *.png
 *.apkg

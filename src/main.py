@@ -2,6 +2,7 @@ from typing import List, Dict, Tuple
 from genanki import Deck, Note, Model, Package
 import requests
 from datetime import datetime
+import logging as log
 
 
 def main(args: List[str]) -> int:
@@ -13,50 +14,68 @@ def main(args: List[str]) -> int:
     deck = build_deck(data)
     # Write the deck object to an .apkg file
     write_deck(out, deck, images)
+    log.info('Done.')
     return 0
 
 
 def download_image(filename: str, uri: str) -> str:
-    headers = {'user-agent':
-        'moneng-anki/0.0.0 (https://github.com/kokestu/moneng-anki)'}
-    img_data = requests.get(uri, headers=headers).content
+    import os.path
+    # Build filename with extension
     ext = uri.split('.')[-1]
-    filename_with_ext = f'{filename}.{ext}'
-    with open('../img/' + filename_with_ext, 'wb') as file:
-        file.write(img_data)
-    return filename_with_ext
+    with_ext = f'{filename}.{ext}'
+    path = '../img/' + with_ext
+    if not os.path.exists(path):
+        # Wikimedia requires descriptive headers
+        log.info(f'Downloading image for {filename}...')
+        headers = {'user-agent':
+            'moneng-anki/0.0.0 (https://github.com/kokestu/moneng-anki)'}
+        img_data = requests.get(uri, headers=headers).content
+        with open(path, 'wb') as file:
+            file.write(img_data)
+    else:
+        log.info(f'Image for {filename} already present...')
+        
+    return with_ext 
 
 
 def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
+    # Make the query to Wikidata
     url = 'https://query.wikidata.org/sparql'
     query = '''
     SELECT (?itemLabel as ?name)
-    (min(?start) as ?start_date) # first start date
-    (max(?end) as ?end_date) # last end date
+    # Get first start date
+    (min(?start) as ?start_date)
+    # Get last end date
+    (max(?end) as ?end_date)
+    # Make a list
     (GROUP_CONCAT(DISTINCT ?replacesLabel; SEPARATOR=", ") AS ?predecessors)
     (GROUP_CONCAT(DISTINCT ?replaced_byLabel; SEPARATOR=", ") AS ?followers)
+    # Get a random image
     (SAMPLE(?pic) AS ?pics)
     WHERE {
-    VALUES ?positions {wd:Q18810062 wd:Q9134365}  # monarch of uk or monarch on England
-    ?item p:P39 ?statement. # position held
-    ?statement ps:P39 ?positions. # position attributes to get:
-    OPTIONAL { ?statement pq:P580 ?start. } # start time
-    OPTIONAL { ?statement pq:P582 ?end. } # end time
-    OPTIONAL { ?statement pq:P1365 ?replaces. } # replaces
-    OPTIONAL { ?statement pq:P1366 ?replaced_by. } # replaced by
-    OPTIONAL { ?item wdt:P18 ?pic} # monarch picture
-    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en".
-                            ?item rdfs:label ?itemLabel.
-                            ?replaces rdfs:label ?replacesLabel.
-                            ?replaced_by rdfs:label ?replaced_byLabel.}
+        # Define positions "monarch of UK" and "monarch of England"
+        VALUES ?positions {wd:Q18810062 wd:Q9134365}
+        # Filter by "position held" == "monarch of UK" or "monarch of England"
+        ?item p:P39 ?statement.
+        ?statement ps:P39 ?positions.
+        # Select relevant parameters
+        OPTIONAL { ?statement pq:P580 ?start. }          # Start time
+        OPTIONAL { ?statement pq:P582 ?end. }            # End time
+        OPTIONAL { ?statement pq:P1365 ?replaces. }      # Predecessor
+        OPTIONAL { ?statement pq:P1366 ?replaced_by. }   # Successor
+        OPTIONAL { ?item wdt:P18 ?pic}                   # Image
+        SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en".
+                                ?item rdfs:label ?itemLabel.
+                                ?replaces rdfs:label ?replacesLabel.
+                                ?replaced_by rdfs:label ?replaced_byLabel.}
     }
-    group by (?itemLabel)
+    # Group records by the monarch name
+    GROUP BY (?itemLabel)
     ORDER BY DESC (?start)
     '''
+    log.info('Making Wikidata request...')
     r = requests.get(url, params={'format': 'json', 'query': query})
     data = r.json()['results']['bindings']
-
-    monarchs = []
 
     def get_value(monarch, name):
         return monarch.get(name, {}).get('value', '')
@@ -66,6 +85,8 @@ def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
             return str(datetime.strptime(iso_date, '%Y-%m-%dT%H:%M:%SZ').year)
         return 'Present'
 
+    # Collect the monarch records and image filenames
+    monarchs = []
     images = []
     for entry in data:
         image_uri = get_value(entry, 'pics')
@@ -90,7 +111,7 @@ def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
 
 
 def build_deck(data: List[Dict[str, str]]) -> Deck:
-    # Define model
+    # Define note type
     model = Model(
         7499558394,  # Unique model ID randomly generated
         'Monarch',
@@ -106,27 +127,27 @@ def build_deck(data: List[Dict[str, str]]) -> Deck:
             {
                 'name': 'Dates',
                 'qfmt': 'Reigned {{ReignedFrom}} - {{ReignedTo}}?',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}',
+                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'Start',
                 'qfmt': 'Reigned from {{ReignedFrom}}?',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}',
+                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'End',
                 'qfmt': 'Reigned to {{ReignedTo}}?',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}',
+                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'Predecessor',
                 'qfmt': '{{#Predecessor}}Reigned after {{Predecessor}}?{{/Predecessor}}',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}',
+                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'Successor',
                 'qfmt': '{{#Successor}}Reigned before {{Successor}}?{{/Successor}}',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}',
+                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'Image',
@@ -170,14 +191,15 @@ def make_note(datum: Dict[str, str], model: Model) -> Note:
     )
     return my_note
 
-
 def write_deck(out: str, deck: Deck, images: List[str]) -> None:
     package = Package(deck)
     package.media_files = [f'../img/{img}' for img in images]
     package.write_to_file(out)
 
-
 if __name__ == "__main__":
     import sys
+    # Logging config
+    log.basicConfig(stream=sys.stdout, level=log.INFO)
+    # Run program
     status = main(sys.argv)
     sys.exit(status)
