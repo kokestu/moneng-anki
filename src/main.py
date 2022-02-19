@@ -89,6 +89,10 @@ def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
     monarchs = []
     images = []
     for entry in data:
+        if get_value(entry, 'name') in [
+                'Eleanor of Aquitaine',
+                ]:
+            continue
         image_uri = get_value(entry, 'pics')
         if not image_uri:
             raise ValueError(f'No image for {entry}')
