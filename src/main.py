@@ -29,13 +29,13 @@ def download_image(filename: str, uri: str) -> str:
         log.info(f'Downloading image for {filename}...')
         headers = {'user-agent':
             'moneng-anki/0.0.0 (https://github.com/kokestu/moneng-anki)'}
-        img_data = requests.get(uri, headers=headers).content
+        img_data = requests.get(uri+'?width=300px', headers=headers).content
         with open(path, 'wb') as file:
             file.write(img_data)
     else:
         log.info(f'Image for {filename} already present...')
-        
-    return with_ext 
+
+    return with_ext
 
 
 def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
