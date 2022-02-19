@@ -26,28 +26,28 @@ def scrape_wikidata() -> List[Dict[str, str]]:
     url = 'https://query.wikidata.org/sparql'
     query = '''
     SELECT (?itemLabel as ?name)
-    (SAMPLE(?start) as ?start)
-    (SAMPLE(?end) as ?end)
-    (GROUP_CONCAT(DISTINCT ?replacesLabel; SEPARATOR=", ") AS ?predecessors)
-    (GROUP_CONCAT(DISTINCT ?replaced_byLabel; SEPARATOR=", ") AS ?followers)
-    (SAMPLE(?pic) AS ?pics)
-    WHERE {
-    VALUES ?positions {wd:Q18810062 wd:Q9134365}
-    ?item p:P39 ?statement.
-    ?statement ps:P39 ?positions.
-    OPTIONAL { ?statement pq:P580 ?start. }
-    OPTIONAL { ?statement pq:P582 ?end. }
-    OPTIONAL { ?statement pq:P1365 ?replaces. }
-    OPTIONAL { ?statement pq:P1366 ?replaced_by. }
-    OPTIONAL { ?item wdt:P18 ?pic}
-    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en".
-                            ?item rdfs:label ?itemLabel.
-                            ?replaces rdfs:label ?replacesLabel.
-                            ?replaced_by rdfs:label ?replaced_byLabel.
-                            }
-    }
-    group by (?itemLabel)
-    ORDER BY DESC (?start)
+(min(?start) as ?start) # first start time
+(max(?end) as ?end) # first end time
+(GROUP_CONCAT(DISTINCT ?titleLabel; SEPARATOR=", ") AS ?titles)
+(GROUP_CONCAT(DISTINCT ?replacesLabel; SEPARATOR=", ") AS ?predecessors)
+(GROUP_CONCAT(DISTINCT ?replaced_byLabel; SEPARATOR=", ") AS ?followers)
+(SAMPLE(?pic) AS ?pics)
+WHERE {
+  VALUES ?positions {wd:Q18810062 wd:Q9134365}  # Monarch of England or Monarch of UK
+  ?item p:P39 ?statement. # position held
+  ?statement ps:P39 ?positions.
+  OPTIONAL { ?statement pq:P580 ?start. } # start time
+  OPTIONAL { ?statement pq:P582 ?end. } # end time
+  OPTIONAL { ?statement pq:P1365 ?replaces. } # replaces
+  OPTIONAL { ?statement pq:P1366 ?replaced_by. } # replaced by
+  OPTIONAL { ?item wdt:P18 ?pic} # picture
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en".
+                         ?item rdfs:label ?itemLabel. # get names from links
+                         ?replaces rdfs:label ?replacesLabel.
+                         ?replaced_by rdfs:label ?replaced_byLabel.}
+}
+group by (?itemLabel)
+ORDER BY DESC (?start)
     '''
     r = requests.get(url, params={'format': 'json', 'query': query})
     data = r.json()['results']['bindings']
@@ -63,7 +63,10 @@ def scrape_wikidata() -> List[Dict[str, str]]:
         return 'Present'
 
     for entry in data:
-        img_name = download_image(get_value(entry, 'pics'),)
+        image_uri = get_value(entry, 'pics')
+        if not image_uri:
+            raise ValueError(f'No image for {entry}')
+        img_name = download_image(image_uri)
         monarch = dict(
             Monarch=get_value(entry, 'name'),
             ReignedFrom=get_year(get_value(entry, 'start')),
