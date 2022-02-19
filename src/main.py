@@ -58,7 +58,7 @@ def scrape_wikidata() -> List[Dict[str, str]]:
 
     def get_year(iso_date):
         if iso_date:
-            return datetime.strptime(iso_date, '%Y-%m-%dT%H:%M:%SZ').year
+            return str(datetime.strptime(iso_date, '%Y-%m-%dT%H:%M:%SZ').year)
         return 'Present'
 
     for entry in data:
@@ -163,8 +163,9 @@ def make_note(datum: Dict[str, str], model: Model) -> Note:
 
 def write_deck(deck: Deck) -> None:
     package = Package(deck)
-    package.media_files = ['../img/miaownarch.jpg']
+    package.media_files = ['../img/William2.jpg']
     package.write_to_file('test.apkg')
+
 
 if __name__ == "__main__":
     import sys
