@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from genanki import Deck, Note, Model, Package
 import requests
 from datetime import datetime
@@ -17,14 +17,16 @@ def main(args: List[str]) -> int:
 
 
 def download_image(filename: str, uri: str) -> str:
-    img_data = requests.get(uri).content
+    headers = {'user-agent':
+        'moneng-anki/0.0.0 (https://github.com/kokestu/moneng-anki)'}
+    img_data = requests.get(uri, headers=headers).content
     ext = uri.split('.')[-1]
     with open('../img/' + filename + ext, 'wb') as file:
         file.write(img_data)
     return filename
 
 
-def scrape_wikidata() -> (List[Dict[str, str]], List[str]):
+def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
     url = 'https://query.wikidata.org/sparql'
     query = '''
     SELECT (?itemLabel as ?name)
