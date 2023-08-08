@@ -52,12 +52,15 @@ def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
     (GROUP_CONCAT(DISTINCT ?replaced_byLabel; SEPARATOR=", ") AS ?followers)
     # Get a random image
     (SAMPLE(?pic) AS ?pics)
+    # Number
+    (SAMPLE(?series_ordinal) AS ?number)
     WHERE {
         # Define positions "monarch of UK" and "monarch of England"
-        VALUES ?positions {wd:Q18810062 wd:Q9134365}
+        VALUES ?positions {wd:Q11696}
         # Filter by "position held" == "monarch of UK" or "monarch of England"
         ?item p:P39 ?statement.
         ?statement ps:P39 ?positions.
+        ?statement pq:P1545 ?series_ordinal.      # Number
         # Select relevant parameters
         OPTIONAL { ?statement pq:P580 ?start. }          # Start time
         OPTIONAL { ?statement pq:P582 ?end. }            # End time
@@ -117,46 +120,52 @@ def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
 def build_deck(data: List[Dict[str, str]]) -> Deck:
     # Define note type
     model = Model(
-        7499558394,  # Unique model ID randomly generated
-        'Monarch',
+        749929594,  # Unique model ID randomly generated
+        'US President',
         fields=[
-            {"name": "Monarch"},
-            {"name": "ReignedFrom"},
-            {"name": "ReignedTo"},
+            {"name": "President"},
+            {"name": "InOfficeFrom"},
+            {"name": "InOfficeTo"},
             {"name": "Image"},
             {"name": "Predecessor"},
             {"name": "Successor"},
+            {"name": "Number"},
         ],
         templates=[
             {
                 'name': 'Dates',
-                'qfmt': 'Reigned {{ReignedFrom}} - {{ReignedTo}}?',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
+                'qfmt': 'In office {{InOfficeFrom}} - {{InOfficeTo}}?',
+                'afmt': '{{FrontSide}}<hr id="answer">{{President}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'Start',
-                'qfmt': 'Reigned from {{ReignedFrom}}?',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
+                'qfmt': 'In office from {{InOfficeFrom}}?',
+                'afmt': '{{FrontSide}}<hr id="answer">{{President}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'End',
-                'qfmt': 'Reigned to {{ReignedTo}}?',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
+                'qfmt': 'In office to {{InOfficeTo}}?',
+                'afmt': '{{FrontSide}}<hr id="answer">{{President}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'Predecessor',
-                'qfmt': '{{#Predecessor}}Reigned after {{Predecessor}}?{{/Predecessor}}',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
+                'qfmt': '{{#Predecessor}}In office after {{Predecessor}}?{{/Predecessor}}',
+                'afmt': '{{FrontSide}}<hr id="answer">{{President}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'Successor',
-                'qfmt': '{{#Successor}}Reigned before {{Successor}}?{{/Successor}}',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}<br>{{#Image}}{{Image}}{{/Image}}',
+                'qfmt': '{{#Successor}}In office before {{Successor}}?{{/Successor}}',
+                'afmt': '{{FrontSide}}<hr id="answer">{{President}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
             {
                 'name': 'Image',
                 'qfmt': '{{#Image}}{{Image}}{{/Image}}',
-                'afmt': '{{FrontSide}}<hr id="answer">{{Monarch}}',
+                'afmt': '{{FrontSide}}<hr id="answer">{{President}}',
+            },
+            {
+                'name': 'Number',
+                'qfmt': 'President number {{Number}}?',
+                'afmt': '{{FrontSide}}<hr id="answer">{{President}}<br>{{#Image}}{{Image}}{{/Image}}',
             },
         ],
         css="""
@@ -171,8 +180,8 @@ def build_deck(data: List[Dict[str, str]]) -> Deck:
     )
     # Create deck
     deck = Deck(
-        4276883578,  # Unique deck ID randomly generated
-        'Monarchs of England'
+        329883578,  # Unique deck ID randomly generated
+        'Presidents of the US'
     )
     # Add notes
     for d in data:
@@ -185,12 +194,13 @@ def make_note(datum: Dict[str, str], model: Model) -> Note:
     my_note = Note(
         model=model,
         fields=[
-            datum.get("Monarch"),
+            datum.get("President"),
             datum.get("ReignedFrom"),
             datum.get("ReignedTo"),
             datum.get("Image"),
             datum.get("Predecessor"),
             datum.get("Successor"),
+            datum.get("Number"),
         ]
     )
     return my_note
