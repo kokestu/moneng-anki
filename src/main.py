@@ -105,12 +105,13 @@ def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
         )
         images.append(img_name)
         monarch = dict(
-            Monarch=get_value(entry, 'name'),
-            ReignedFrom=get_year(get_value(entry, 'start_date')),
-            ReignedTo=get_year(get_value(entry, 'end_date')),
+            President=get_value(entry, 'name'),
+            InOfficeFrom=get_year(get_value(entry, 'start_date')),
+            InOfficeTo=get_year(get_value(entry, 'end_date')),
             Image=f'<img src="{img_name}">',
             Predecessor=get_value(entry, 'predecessors'),
             Successor=get_value(entry, 'followers'),
+            Number=get_value(entry, 'number'),
         )
         monarchs.append(monarch)
 
@@ -120,7 +121,7 @@ def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
 def build_deck(data: List[Dict[str, str]]) -> Deck:
     # Define note type
     model = Model(
-        749929594,  # Unique model ID randomly generated
+        74929594,  # Unique model ID randomly generated
         'US President',
         fields=[
             {"name": "President"},
@@ -180,7 +181,7 @@ def build_deck(data: List[Dict[str, str]]) -> Deck:
     )
     # Create deck
     deck = Deck(
-        329883578,  # Unique deck ID randomly generated
+        32983578,  # Unique deck ID randomly generated
         'Presidents of the US'
     )
     # Add notes
@@ -195,8 +196,8 @@ def make_note(datum: Dict[str, str], model: Model) -> Note:
         model=model,
         fields=[
             datum.get("President"),
-            datum.get("ReignedFrom"),
-            datum.get("ReignedTo"),
+            datum.get("InOfficeFrom"),
+            datum.get("InOfficeTo"),
             datum.get("Image"),
             datum.get("Predecessor"),
             datum.get("Successor"),
