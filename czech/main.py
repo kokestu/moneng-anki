@@ -20,6 +20,9 @@ class WordData(NamedTuple):
     defs: List[Definition]  # list of definitions and usage examples
     english: List[str]      # the English word translation
 
+# Mapping from word to word data
+Data = Dict[str, WordData]
+
 def main(args: List[str]) -> int:
     assert len(args) == 2, "Usage: main OUTPUT"
     out = args[1]
@@ -36,16 +39,16 @@ def main(args: List[str]) -> int:
     return 0
 
 
-def scrape_wiktionary(page: str) -> Dict[str, WordData]:
+def scrape_wiktionary(page: str) -> Data:
     pass
 
-def get_translations(data: Dict[str, WordData]):
+def get_translations(data: Data):
     pass
 
-def get_tts(data: Dict[str, WordData]):
+def get_tts(data: Data):
     pass
 
-def build_deck(data: Dict[str, WordData]) -> Deck:
+def build_deck(data: Data) -> Deck:
     # Define note type
     model = Model(
         3923034357,  # Unique model ID randomly generated
@@ -97,7 +100,7 @@ def make_note(datum: WordData, model: Model) -> Note:
     )
     return my_note
 
-def write_deck(out: str, deck: Deck, data: Dict[str, WordData]) -> None:
+def write_deck(out: str, deck: Deck, data: Data) -> None:
     package = Package(deck)
     files = None   # TODO: using data
     package.media_files = [f'../audio/{file}' for file in files]
