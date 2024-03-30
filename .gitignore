@@ -3,3 +3,7 @@
 *.JPG
 *.png
 *.apkg
+img
+audio
+# Ignore API keys
+czech/deepl-api.txt
