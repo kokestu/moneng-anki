@@ -60,6 +60,51 @@ class WkWordListHTMLParser(HTMLParser):
             self.in_words = True
 
 
+class WkWordPageHTMLParser(HTMLParser):
+    # the id of a given section
+    current_section = None
+    in_examples = False
+    text = ""
+    process_line = False
+
+    def __init__(self, word_data: WordData = None,
+                 *, convert_charrefs: bool = True) -> None:
+        super().__init__(convert_charrefs=convert_charrefs)
+        self.word_data = word_data
+
+    def handle_starttag(self, tag, attrs):
+        if dict(attrs).get("id") == "význam":
+            self.current_section = "význam"
+        if self.current_section == "význam":
+            if tag == 'ul':
+                self.examples = []
+                self.in_examples = True
+                print(self.text.strip("\n"))
+            if tag == 'li':
+                self.process_line = True
+                self.text = ""
+            if tag == 'b' and self.process_line:
+                self.text += "<b>"
+
+    def handle_data(self, data: str) -> None:
+        if self.process_line:
+            self.text += data
+
+    # Handle the closing tags.
+    def handle_endtag(self, tag):
+        if self.current_section == "význam":
+            if tag == 'ol':
+                self.current_section = None
+            if tag == 'ul':
+                self.in_examples = False
+            if tag == 'li':
+                if self.in_examples:
+                    print("*", self.text)
+                self.process_line = False
+            if tag == 'b':
+                self.text += "</b>"
+
+
 def main(args: List[str]) -> int:
     assert len(args) == 2, "Usage: main OUTPUT"
     out = args[1]
