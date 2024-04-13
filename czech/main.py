@@ -4,6 +4,7 @@ import requests
 import logging as log
 from html.parser import HTMLParser
 from dataclasses import dataclass
+from tqdm import tqdm
 
 @dataclass
 class Definition:
@@ -72,6 +73,9 @@ class WkWordPageHTMLParser(HTMLParser):
     def_no = -1
     # Are we collecting translations?
     collect_trans = False
+    # Keeping track of language
+    is_h2 = False
+    is_czech = False
 
     def __init__(self, *, convert_charrefs: bool = True) -> None:
         super().__init__(convert_charrefs=convert_charrefs)
@@ -89,6 +93,16 @@ class WkWordPageHTMLParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        # Until we get to the section on Czech, ignore everything.
+        if tag == "h2":
+            self.is_h2 = True
+            self.is_czech = False
+            return
+        if self.is_h2 and attrs.get("id") == "čeština":
+            self.is_czech = True
+        if not self.is_czech:
+            return
+        # We're looking at czech, keep going
         # Keep track of the current section.
         new_id = self._sort_current_section(attrs.get("id"))
         if new_id == "význam":
@@ -151,6 +165,13 @@ class WkWordPageHTMLParser(HTMLParser):
 
     # Handle the closing tags.
     def handle_endtag(self, tag):
+        # Until we get to the section on Czech, ignore everything.
+        if tag == "h2":
+            self.is_h2 = False
+            return
+        if not self.is_czech:
+            return
+        # we're looking at czech, keep going
         if self.current_section == "význam":
             if tag == 'ul':
                 # We've gotten to the end of the unordered list of
@@ -161,6 +182,20 @@ class WkWordPageHTMLParser(HTMLParser):
                     # This is the start of the next example, so finish the last
                     # one, and add it to the list in the current definition.
                     self.defs[-1].examples.append(self.text)
+                    self.text = ""
+                elif self.text:
+                    # special case: no examples for a word (we don't hit <ul>)
+                    # alternatively, if we are not in examples, this is the end
+                    # or a defintition with no examples
+                    self.defs.append(
+                        Definition(
+                            definition=self.text.strip("\n"),
+                            # to be filled in later:
+                            examples=[],
+                            english=[]
+                        )
+                    )
+                    self.text = ""
                 self.process_line = False
             if tag == 'b':
                 # Keep emphasis on words.
@@ -207,7 +242,7 @@ def scrape_wiktionary(page: str) -> Data:
     parser.feed(resp.content.decode("utf-8"))
     words = parser.data
     # For each word, get all of the word data.
-    for word in words.values():
+    for word in tqdm(words.values()):
         resp = requests.get(word.wk_link)
         if resp.status_code != 200:
             raise RuntimeError(resp.status_code)
