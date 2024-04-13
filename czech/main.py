@@ -5,6 +5,25 @@ from datetime import datetime
 import logging as log
 from html.parser import HTMLParser
 
+
+class Definition(NamedTuple):
+    definition: str
+    example: str               # An example sentence
+    example_en: str = None     # The example in English
+    audio: str = None          # The audio file name
+
+# Data from Wiktionary
+class WordData(NamedTuple):
+    word: str                   # the root word
+    rank: int                   # its frequency rank
+    wk_link: str                # url for its Wiktionary page
+    defs: List[Definition]      # list of definitions and usage examples
+    english: List[str]          # the English word translations
+
+# Mapping from word to word data
+Data = Dict[str, WordData]
+
+
 class WkWordListHTMLParser(HTMLParser):
     # Have we got to the words yet?
     in_words = False
@@ -23,7 +42,9 @@ class WkWordListHTMLParser(HTMLParser):
                     word = word,
                     rank = self.wordrank,
                     wk_link = f"https://cs.wiktionary.org{attrs['href']}",
-                    defs = []  # to be filled in later
+                    # to be filled in later:
+                    defs = [],
+                    english = []
                 )
                 # Bump the word rank tracker
                 self.wordrank += 1
@@ -35,27 +56,9 @@ class WkWordListHTMLParser(HTMLParser):
         if self.in_words and tag == "p":
             self.in_words = False
         elif tag == "h5":
-            # We've got to the words.
+            # We've got to the words: these headers top each word section.
             self.in_words = True
 
-class Definition(NamedTuple):
-    definition: str
-    english: List[str]         # the English word translation
-    example: str               # An example sentence
-    example_en: str = None     # The example in English
-    audio: str = None          # The audio file name
-    target: str = None         # The target word in the example
-    target_en: str = None      # The target word in English
-
-# Data from Wiktionary
-class WordData(NamedTuple):
-    word: str               # the root word
-    rank: int               # its frequency rank
-    wk_link: str            # url for its Wiktionary page
-    defs: List[Definition]  # list of definitions and usage examples
-
-# Mapping from word to word data
-Data = Dict[str, WordData]
 
 def main(args: List[str]) -> int:
     assert len(args) == 2, "Usage: main OUTPUT"
