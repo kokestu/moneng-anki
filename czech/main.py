@@ -3,11 +3,46 @@ from genanki import Deck, Note, Model, Package
 import requests
 from datetime import datetime
 import logging as log
+from html.parser import HTMLParser
+
+class WkWordListHTMLParser(HTMLParser):
+    # Have we got to the words yet?
+    in_words = False
+    # The data collected so far.
+    data = {}
+    # Keep track of the rank of the current word.
+    wordrank = 1
+    # Handle the HTML tags.
+    def handle_starttag(self, tag, attrs):
+        if self.in_words:
+            if tag == "a" and "title" in [k for (k,v) in attrs]:
+                # Build the word data.
+                attrs = dict(attrs)
+                word = attrs["title"]
+                self.data[word] = WordData(
+                    word = word,
+                    rank = self.wordrank,
+                    wk_link = f"https://cs.wiktionary.org{attrs['href']}",
+                    defs = []  # to be filled in later
+                )
+                # Bump the word rank tracker
+                self.wordrank += 1
+        else:
+            pass
+    # Handle the closing tags.
+    def handle_endtag(self, tag):
+        # The words are only between the p tags after the header.
+        if self.in_words and tag == "p":
+            self.in_words = False
+        elif tag == "h5":
+            # We've got to the words.
+            self.in_words = True
 
 class Definition(NamedTuple):
     definition: str
-    example: str
-    example_en: str = None     # The translation in English
+    english: List[str]         # the English word translation
+    example: str               # An example sentence
+    example_en: str = None     # The example in English
     audio: str = None          # The audio file name
     target: str = None         # The target word in the example
     target_en: str = None      # The target word in English
@@ -18,7 +53,6 @@ class WordData(NamedTuple):
     rank: int               # its frequency rank
     wk_link: str            # url for its Wiktionary page
     defs: List[Definition]  # list of definitions and usage examples
-    english: List[str]      # the English word translation
 
 # Mapping from word to word data
 Data = Dict[str, WordData]
@@ -40,7 +74,15 @@ def main(args: List[str]) -> int:
 
 
 def scrape_wiktionary(page: str) -> Data:
-    pass
+    # Build the string to get the right page of the list.
+    url = (
+        "https://cs.wiktionary.org/wiki/P%C5%99%C3%ADloha:Frekven%C4%8Dn%"
+        f"C3%AD_seznam_(%C4%8De%C5%A1tina)/%C4%8CNK_SYN2005/{page}"
+    )
+    resp = requests.get(url)
+    parser = WkWordListHTMLParser()
+    parser.feed(resp.content.decode("utf-8"))
+    return parser.data
 
 def get_translations(data: Data):
     pass
@@ -67,7 +109,7 @@ def build_deck(data: Data) -> Deck:
             {
                 'name': 'CzEnExample',
                 'qfmt': '{{Example}}<br>{{ExampleAudio}}',
-                'afmt': '{{FrontSide}}<hr id="answer">{{EnglishExample}}<br><a href={{Wiktionary}}>Wiktionary</a>',
+                'afmt': '{{FrontSide}}<hr id="answer">{{EnglishExample}}<br><a href={{Wiktionary}}>Wiktionary</a><br><a href=https://glosbe.com/cs/en/{{Word}}>Glosbe</a>',
             }
         ],
         css="""
