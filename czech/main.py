@@ -1,20 +1,20 @@
-from typing import List, Dict, NamedTuple
+from typing import List, Dict
 from genanki import Deck, Note, Model, Package
 import requests
-from datetime import datetime
 import logging as log
 from html.parser import HTMLParser
+from dataclasses import dataclass
 
-
-class Definition(NamedTuple):
+@dataclass
+class Definition:
     definition: str
+    english: List[str]       # the English word translations
     examples: List[str]      # The example sentences
     example_en: str = None   # The example in English
     audio: str = None        # The audio file name
-    english: List[str]       # the English word translations
 
-# Data from Wiktionary
-class WordData(NamedTuple):
+@dataclass
+class WordData:
     word: str                   # the root word
     rank: int                   # its frequency rank
     wk_link: str                # url for its Wiktionary page
@@ -68,18 +68,33 @@ class WkWordPageHTMLParser(HTMLParser):
     process_line = False
     # Hold the definition or example so far -- as we're building it.
     text = ""
-    # Keep track of the definitions we've found.
-    defs = []
     # Keep track of the definition that the current translation goes with.
-    def_no = 0
+    def_no = -1
     # Are we collecting translations?
     collect_trans = False
+
+    def __init__(self, *, convert_charrefs: bool = True) -> None:
+        super().__init__(convert_charrefs=convert_charrefs)
+        # Track the definitions we've found.
+        self.defs = []
+
+    def _sort_current_section(self, id):
+        if "význam" in (id or ""):
+            self.current_section = "význam"
+            return "význam"
+        elif "překlady" in (id or ""):
+            self.current_section = "překlady"
+            return "překlady"
+        return None
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         # Keep track of the current section.
-        if attrs.get("id") in ["význam", "překlady"]:
-            self.current_section = attrs.get("id")
+        new_id = self._sort_current_section(attrs.get("id"))
+        if new_id == "význam":
+            # New definitions section. Want to start the translations
+            # counter at the end of this list.
+            self.def_no = len(self.defs) - 1
         # When we're in "význam", get the definitions and examples.
         if self.current_section == "význam":
             if tag == 'ul':
@@ -116,6 +131,9 @@ class WkWordPageHTMLParser(HTMLParser):
             ):
                 # We've found an English translation!
                 self.collect_trans = True
+            elif tag == "div" and attrs["class"] == "translations":
+                # Start of the next translation, bump the count.
+                self.def_no += 1
 
 
     def handle_data(self, data: str) -> None:
@@ -124,6 +142,10 @@ class WkWordPageHTMLParser(HTMLParser):
             self.text += data
         elif self.collect_trans:
             # Collect the translation.
+            if len(self.defs) <= self.def_no:
+                print(self.def_no)
+                print(self.defs)
+                print(data)
             self.defs[self.def_no].english.append(data)
             self.collect_trans = False
 
@@ -143,20 +165,16 @@ class WkWordPageHTMLParser(HTMLParser):
             if tag == 'b':
                 # Keep emphasis on words.
                 self.text += "</b>"
-        elif self.current_section == "překlady":
-            if tag == 'div':
-                # End of current definition translation, bump the count.
-                self.def_no += 1
         if tag == 'ol':
             # Found the end of the current section.
             self.current_section = None
 
 def test_parse():
-    url = "https://cs.wiktionary.org/wiki/kluk"
+    url = "https://cs.wiktionary.org/wiki/a"
     resp = requests.get(url)
     parser = WkWordPageHTMLParser()
     parser.feed(resp.content.decode("utf-8"))
-    return parser
+    return parser.defs
 
 
 def main(args: List[str]) -> int:
@@ -183,12 +201,20 @@ def scrape_wiktionary(page: str) -> Data:
     )
     # Get the word list.
     resp = requests.get(url)
+    if resp.status_code != 200:
+        raise RuntimeError(resp.status_code)
     parser = WkWordListHTMLParser()
     parser.feed(resp.content.decode("utf-8"))
     words = parser.data
     # For each word, get all of the word data.
-    for word in words:
-
+    for word in words.values():
+        resp = requests.get(word.wk_link)
+        if resp.status_code != 200:
+            raise RuntimeError(resp.status_code)
+        parser = WkWordPageHTMLParser()
+        parser.feed(resp.content.decode("utf-8"))
+        word.defs = parser.defs
+    return words
 
 
 def _get_word_translation(text):
