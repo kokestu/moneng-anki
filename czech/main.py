@@ -138,8 +138,12 @@ def build_deck(data: Data) -> Deck:
         templates=[
             {
                 'name': 'CzEnExample',
-                'qfmt': '{{Example}}<br>{{ExampleAudio}}',
-                'afmt': '{{FrontSide}}<hr id="answer">{{EnglishExample}}<br><a href={{Wiktionary}}>Wiktionary</a><br><a href=https://glosbe.com/cs/en/{{Word}}>Glosbe</a>',
+                'qfmt': "{{Example}}<br>{{#ExampleAudio}}{{ExampleAudio}}{{/ExampleAudio}}",
+                'afmt': ("{{FrontSide}}<hr id=\"answer\">"
+                         "{{EnglishExample}}<br>"
+                         "<a href={{Wiktionary}} style=\"font-size:10px\">Wiktionary</a><br>"
+                         "<a href=https://glosbe.com/cs/en/{{Word}} style=\"font-size:10px\">Glosbe</a>"
+                        ),
             }
         ],
         css="""
@@ -158,16 +162,36 @@ def build_deck(data: Data) -> Deck:
         'My Refold Czech'
     )
     # Add notes
-    for d in data.values():
-        deck.add_note(make_note(d, model))
+    for word in data.values():
+        # Make a note for every definition, not every word (since a word
+        # can mean quite different things in different conditions).
+        for definition in word.defs:
+            deck.add_note(make_note(definition, word, model))
     # Return
     return deck
 
-def make_note(datum: WordData, model: Model) -> Note:
+def make_note(
+    definition: Definition, word: WordData, model: Model
+) -> Note:
     my_note = Note(
         model=model,
         fields=[
-            # TODO
+            # Word
+            word.word,
+            # EnglishWord
+            word.english.join(", "),
+            # Rank
+            word.rank,
+            # Definition
+            definition.definition,
+            # Example
+            definition.example,
+            # ExampleAudio
+            None,    # TODO
+            # EnglishExample
+            definition.example_en,
+            # Wiktionary
+            word.wk_link
         ]
     )
     return my_note
