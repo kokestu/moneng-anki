@@ -241,7 +241,8 @@ def scrape_wiktionary(page: str) -> Data:
     parser = WkWordListHTMLParser()
     parser.feed(resp.content.decode("utf-8"))
     words = parser.data
-    # For each word, get all of the word data.
+    # For each word, get all of the word data. Display a progress bar
+    # with tqdm.
     for word in tqdm(words.values()):
         resp = requests.get(word.wk_link)
         if resp.status_code != 200:
