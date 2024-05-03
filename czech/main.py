@@ -1,10 +1,12 @@
 from typing import List, Dict
 from genanki import Deck, Note, Model, Package
 import requests
+import pickle
 import logging as log
 from html.parser import HTMLParser
 from dataclasses import dataclass
 from tqdm import tqdm
+
 
 @dataclass
 class Definition:
@@ -217,6 +219,9 @@ def main(args: List[str]) -> int:
     out = args[1]
     # Get the words, definitions, and examples from Wiktionary
     data = scrape_wiktionary("1-1000")
+    # Reorder the example sentences in-place so that the one we want to
+    # make a card with comes first.
+    choose_example_sentences(data)
     # Get translations from DeepL
     get_translations(data)
     # Get TTS.
@@ -227,6 +232,21 @@ def main(args: List[str]) -> int:
     log.info('Done.')
     return 0
 
+def main_pickle():
+    """Use data scraped already."""
+    with open("worddata.pkl", 'rb') as f:
+        data = pickle.load(f)
+    # Reorder the example sentences in-place so that the one we want to
+    # make a card with comes first.
+    choose_example_sentences(data)
+    # Get translations from DeepL
+    get_translations(data)
+    # Save the data with translations.
+    with open("worddata-tr.pkl", 'wb') as f:
+        pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+    # Build and write the deck object to an .apkg file
+    deck = build_deck(data)
+    write_deck("./cz-1000.apkg", deck)
 
 def scrape_wiktionary(page: str) -> Data:
     # Build the string to get the right page of the list.
@@ -253,6 +273,25 @@ def scrape_wiktionary(page: str) -> Data:
     return words
 
 
+def choose_example_sentences(data: Data):
+    """Reorder the example sentences for each definition such that the first one
+    will be translated for use on the card. If all the example sentences are rejected,
+    the first value will be None, and we will not fetch a translation or make a note
+    for that definition.
+    """
+    for word in data.values():
+        for d in word.defs:
+            # Sort in increasing order of sentence length.
+            d.examples.sort(key=lambda x: len(x.split()))
+            # If there are no example sentences, or the shortest is too long,
+            # insert None so that we don't fetch a translation.
+            if d.examples == [] or len(d.examples[0].split()) > 9:
+                d.examples.insert(0, None)
+            else:
+                # Get rid of non-breaking spaces where they occur.
+                d.examples[0] = d.examples[0].replace(u'\xa0', u' ')
+
+
 def _get_word_translation(text):
     with open("deepl-api.txt") as f:
         api_key = f.readline()
@@ -268,6 +307,8 @@ def _get_word_translation(text):
         'split_sentences': 0
     }
     response = requests.post(url, headers=headers, data=data)
+    if response.status_code != 200:
+        raise RuntimeError(response.status_code)
     return response.json()["translations"][0]["text"]
 
 
@@ -278,8 +319,14 @@ def get_translations(data: Data):
         data (Data): The word data
     """
     for entry in data.values():
+        print(entry.word, ":")
         for definition in entry.defs:
-            definition.example_en = _get_word_translation(definition.example)
+            if definition.examples[0] is None:
+                # No good example sentences, skip this definition.
+                continue
+            print('\t', definition.examples[0])
+            definition.example_en = _get_word_translation(definition.examples[0])
+            print('\t', definition.example_en, '\n')
 
 
 def get_tts(data: Data):
@@ -291,21 +338,21 @@ def build_deck(data: Data) -> Deck:
         3923034357,  # Unique model ID randomly generated
         'Czech Definition',
         fields=[
+            {"name": "Definition"},
             {"name": "Word"},
             {"name": "EnglishWord"},
-            {"name": "Rank"},
-            {"name": "Definition"},
             {"name": "Example"},
-            {"name": "ExampleAudio"},
             {"name": "EnglishExample"},
+            {"name": "ExampleAudio"},
             {"name": "Wiktionary"},
+            {"name": "Rank"}
         ],
         templates=[
             {
                 'name': 'CzEnExample',
-                'qfmt': "{{Example}}<br>{{#ExampleAudio}}{{ExampleAudio}}{{/ExampleAudio}}",
+                'qfmt': "<b>{{Word}}</b><br>{{Example}}{{#ExampleAudio}}<br>{{ExampleAudio}}{{/ExampleAudio}}",
                 'afmt': ("{{FrontSide}}<hr id=\"answer\">"
-                         "{{EnglishExample}}<br>"
+                         "<b>{{EnglishWord}}</b><br>{{EnglishExample}}<br>"
                          "<a href={{Wiktionary}} style=\"font-size:10px\">Wiktionary</a><br>"
                          "<a href=https://glosbe.com/cs/en/{{Word}} style=\"font-size:10px\">Glosbe</a>"
                         ),
@@ -329,9 +376,11 @@ def build_deck(data: Data) -> Deck:
     # Add notes
     for word in data.values():
         # Make a note for every definition, not every word (since a word
-        # can mean quite different things in different conditions).
+        # can mean quite different things in different conditions). Only
+        # create a note if there is a good example sentence.
         for definition in word.defs:
-            deck.add_note(make_note(definition, word, model))
+            if definition.examples[0]:
+                deck.add_note(make_note(definition, word, model))
     # Return
     return deck
 
@@ -341,30 +390,31 @@ def make_note(
     my_note = Note(
         model=model,
         fields=[
+            # Definition
+            definition.definition,
             # Word
             word.word,
             # EnglishWord
-            word.english.join(", "),
-            # Rank
-            word.rank,
-            # Definition
-            definition.definition,
+            ", ".join(definition.english),
             # Example
-            definition.example,
-            # ExampleAudio
-            None,    # TODO
+            definition.examples[0],
             # EnglishExample
             definition.example_en,
+            # ExampleAudio
+            '',    # TODO
             # Wiktionary
-            word.wk_link
+            word.wk_link,
+            # Rank
+            str(word.rank)
         ]
     )
     return my_note
 
-def write_deck(out: str, deck: Deck, data: Data) -> None:
+def write_deck(out: str, deck: Deck) -> None:
     package = Package(deck)
-    files = None   # TODO: using data
-    package.media_files = [f'../audio/{file}' for file in files]
+    # In case we add TTS later: 
+    # files = None   # TODO: using data
+    # package.media_files = [f'../audio/{file}' for file in files]
     package.write_to_file(out)
 
 if __name__ == "__main__":
