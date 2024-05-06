@@ -234,16 +234,18 @@ def main(args: List[str]) -> int:
 
 def main_pickle():
     """Use data scraped already."""
-    with open("worddata.pkl", 'rb') as f:
+    # with open("worddata.pkl", 'rb') as f:
+    #     data = pickle.load(f)
+    # # Reorder the example sentences in-place so that the one we want to
+    # # make a card with comes first.
+    # choose_example_sentences(data)
+    # # Get translations from DeepL
+    # get_translations(data)
+    # # Save the data with translations.
+    # with open("worddata-tr.pkl", 'wb') as f:
+    #     pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+    with open("worddata-tr.pkl", 'rb') as f:
         data = pickle.load(f)
-    # Reorder the example sentences in-place so that the one we want to
-    # make a card with comes first.
-    choose_example_sentences(data)
-    # Get translations from DeepL
-    get_translations(data)
-    # Save the data with translations.
-    with open("worddata-tr.pkl", 'wb') as f:
-        pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
     # Build and write the deck object to an .apkg file
     deck = build_deck(data)
     write_deck("./cz-1000.apkg", deck)
@@ -376,11 +378,11 @@ def build_deck(data: Data) -> Deck:
     # Add notes
     for word in data.values():
         # Make a note for every definition, not every word (since a word
-        # can mean quite different things in different conditions). Only
-        # create a note if there is a good example sentence.
+        # can mean quite different things in different conditions). Create
+        # notes even when we're missing an example, since they won't have cards
+        # created when blank, but I can add examples later.
         for definition in word.defs:
-            if definition.examples[0]:
-                deck.add_note(make_note(definition, word, model))
+            deck.add_note(make_note(definition, word, model))
     # Return
     return deck
 
@@ -397,9 +399,9 @@ def make_note(
             # EnglishWord
             ", ".join(definition.english),
             # Example
-            definition.examples[0],
+            definition.examples[0] if definition.examples[0] else '',
             # EnglishExample
-            definition.example_en,
+            definition.example_en if definition.example_en else '',
             # ExampleAudio
             '',    # TODO
             # Wiktionary
