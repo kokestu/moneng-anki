@@ -38,6 +38,7 @@ def download_image(filename: str, uri: str) -> str:
     return with_ext
 
 
+# Test queries at: https://query.wikidata.org/
 def scrape_wikidata() -> Tuple[List[Dict[str, str]], List[str]]:
     # Make the query to Wikidata
     url = 'https://query.wikidata.org/sparql'
