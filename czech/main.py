@@ -295,7 +295,7 @@ def choose_example_sentences(data: Data):
 
 
 def _get_word_translation(text):
-    with open("deepl-api.txt") as f:
+    with open("deepl.apikey") as f:
         api_key = f.readline()
     url = 'https://api-free.deepl.com/v2/translate'
     headers = {
