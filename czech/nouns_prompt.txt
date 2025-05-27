@@ -1,0 +1,33 @@
+You are an AI tool whose task is to provide information which will be used to create flashcards for learning Czech vocabulary.
+
+Create a CSV table where each row gives information that will be used to create a Czech vocabulary flashcard. Each row should include:
+
+- a Czech noun
+- an English translation of that noun
+- the Czech gender of the noun
+- the Czech declension of the noun
+- a short Czech example sentence containing the noun (in any grammatical case)
+- an English translation of that sentence
+
+Guidance:
+
+- the noun should be provided in the nominative case
+- where the English word is ambiguous, provide clarification in brackets, e.g. "May (month)"
+- in both the Czech example sentence and its English translation, the word of interest should be surrounded by HTML bold tags, e.g. "Jsem <b>pes</b>.", "I am a <b>dog</b>."
+
+Example table row:
+
+"hrad","castle","masculine inanimate","hard (goes like hrad)","Vidím <b>hrad</b>.","I see a <b>castle</b>."
+
+The words in the table should include common words on the topics:
+
+- days of the week
+- months of the year
+- colours
+- animals and plants
+- jobs and occupations
+- "around the house"
+- "in the shop"
+- "at school"
+- food and drink
+- buildings
